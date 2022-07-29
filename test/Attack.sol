@@ -67,26 +67,6 @@ contract SherlockTest is Test, Minter, ERC721TokenReceiver, OneInchSwapUtils{
         WETH.call{value: 10000 ether}("");
     }
 
-    function testInitialStake() public {
-        ERC20(usdc).approve(sherlock, mintAmount);
-        (uint id, uint shares) = ISherlockStake(sherlock).initialStake(mintAmount, period, address(this));
-    }
-
-    function testRedeemStake() public {
-        ERC20(usdc).approve(sherlock, mintAmount);
-
-
-        uint256 preDeposit = ERC20(usdc).balanceOf(address(this));
-        (uint id, uint shares) = ISherlockStake(sherlock).initialStake(mintAmount, period, address(this));
-
-        vm.warp(block.timestamp + period + 10);
-        vm.roll(block.number + 1);
-
-        uint256 amount = ISherlockStake(sherlock).redeemNFT(id);
-        console.log("profit:", amount - preDeposit);
-
-    }
-
     function depositEuler(address collateral, uint256 amount) internal {
         // IEulerMarkets markets = IEulerMarkets(EULER_MAINNET_MARKETS);
         MarketsLike markets = MarketsLike(EULER_MAINNET_MARKETS);
