@@ -41,9 +41,9 @@ contract SherlockTest is Test, Minter, ERC721TokenReceiver, OneInchSwapUtils{
     using SafeTransferLib for ERC20;
 
     address sherlock = 0x0865a889183039689034dA55c1Fd12aF5083eabF;
-    uint256 mintAmount = 10_000_000 * 10 ** 6; // Amount of USDC to mint in total
-    uint256 donateAmount =  1_000_000 * 10 ** 6; // Amount of the minted USDC will be donated to the EulerStrategy
-    uint256 flashloanAmount = 1_000_000_000 * 10 ** 6; // Amount of USDC to flashloan
+    uint256 mintAmount = 15_000_000 * 10 ** 6; // Amount of USDC to mint in total
+    uint256 donateAmount =  10_000_000 * 10 ** 6; // Amount of the minted USDC will be donated to the EulerStrategy
+    uint256 flashloanAmount = 990_000_000 * 10 ** 6; // Amount of USDC to flashloan
     uint256 period = 15724800; // 6 months
 
     address eulerStrategy = 0xC124A8088c39625f125655152A168baA86b49026;
